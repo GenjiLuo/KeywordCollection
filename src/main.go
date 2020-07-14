@@ -101,7 +101,9 @@ func main() {
 	parseserv.ParseServer().Start()
 	qtasks.ContentRetrievalServer().Start()
 
+	// 初始化并启动Web服务
 	app := tygin.NewApplication(global.ProjectConfig.Debug)
+	//
 	app.SetEnableTLS(global.ProjectConfig.TLS.Enable)
 	if app.EnableTLS() {
 		app.SetTlsFile(global.ProjectConfig.TLS.CertFile, global.ProjectConfig.TLS.KeyFile)
@@ -109,9 +111,12 @@ func main() {
 
 	err = app.Run(global.ProjectConfig.Port, func(app *tygin.WebApplication) {
 		app.Engine().Use(tymiddleware.CorsHandler(nil))
+		//启动websockt服务
 		ws.RegisterService(app.Engine())
+		//启动http服务
 		api.RegiserService(app.Engine())
 	})
+	
 	log.Panic(err)
 
 	// pro := &Program{}
