@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>在线调试系统</title>
+    <style>
+        .control {
+            position: fixed;
+            width: 100%;
+            height: 50px;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            background: aliceblue;
+            line-height: 50px;
+            padding: 0 20px;
+        }
+
+        .body {
+            position: fixed;
+            width: 100%;
+            height: calc(100% - 50px);
+            top: 50px;
+            left: 0;
+            z-index: 100;
+            background: black;
+            line-height: 50px;
+            padding: 10px 20px;
+            overflow-y: scroll;
+        }
+
+        .txt {
+            margin-right: 10px;
+        }
+
+        #doBox {
+            display: none;
+        }
+
+        .body p {
+            font-size: 12px;
+            color: white;
+            line-height: 25px;
+        }
+    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+
+<div class="control">
+    <span class="txt"><input type="button" value="清屏" onclick="clearBody()"/></span>
+    <span class="txt"><input type="button" value="连接websocket" onclick="initWebsocket()"/></span>
+    <span class="txt"><input type="button" value="关闭websocket" onclick="closeWebsocket()"/></span>
+
+    <span class="txt">搜索引擎：<select id="engine">
+        <option value="baidu">百度</option>
+        <option value="sogou">搜狗</option>
+        <option value="so360">360</option>
+        <option value="shenma">神马</option>
+    </select></span>
+
+    <span class="txt">设备：<select id="device">
+        <option value="pc">PC</option>
+        <option value="mobile">手机</option>
+    </select></span>
+
+    <span class="txt">关键词：<input type="text" id="wd" value=""/></span>
+    <span class="txt">目标域名：<input type="text" id="domain" value=""/></span>
+    <span class="txt">页码：<input type="text" id="page" value="1"/></span>
+    <span class="txt"><input type="button" value="提交" onclick="sendMsg()"/></span>
+</div>
+<iframe id="doBox"></iframe>
+<div class="body" id="body">
+
+</div>
+<script>
+    function clearBody(){
+        document.getElementById('body').innerHTML = "";
+    }
+    function time() {
+        let now = new Date();
+        let year = now.getFullYear(); //得到年份
+        let month = now.getMonth();//得到月份
+        let date = now.getDate();//得到日期
+        // let day = now.getDay();//得到周几
+        let hour = now.getHours();//得到小时
+        let minu = now.getMinutes();//得到分钟
+        let sec = now.getSeconds();//得到秒
+        // let MS = now.getMilliseconds();//获取毫秒
+        // let week;
+        month = month + 1;
+        if (month < 10) month = "0" + month;
+        if (date < 10) date = "0" + date;
+        if (hour < 10) hour = "0" + hour;
+        if (minu < 10) minu = "0" + minu;
+        if (sec < 10) sec = "0" + sec;
+        // if (MS < 100) MS = "0" + MS;
+        // let arr_week = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六");
+        // week = arr_week[day];
+        return year + "-" + month + "-" + date + " " + hour + ":" + minu + ":" + sec;
+    }
+
+    function showMsg(msg) {
+        let body = document.getElementById('body');
+        let p = document.createElement('p');
+        p.innerHTML = time() + " >>> " + msg;
+        body.insertBefore(p, body.childNodes[0]);
+    }
+
+    let websocketConnType = false;
+    let heartbeatTimeout;
+    let websocket;
+    let clientID = 0;
+
+    function initWebsocket() {
+        websocket = new WebSocket('ws://180.76.249.33:9111/ws');
+        websocket.onopen = websocketOnOpen;
+        websocket.onerror = websocketOnError;
+        websocket.onmessage = websocketOnMessage;
+        websocket.onclose = websocketClose;
+    }
+
+    function closeWebsocket() {
+        if (websocket) {
+            websocket.close();
+        }
+    }
+
+    function websocketOnOpen() {
+        websocketConnType = true;
+        showMsg('websocket连接成功!');
+    }
+
+    function websocketOnError(e) {
+        console.log("error", e);
+        showMsg('websocket错误！');
+    }
+
+    function websocketOnMessage(e) {
+        showMsg('websocket消息：' + e.data);
+        let data = JSON.parse(e.data);
+        //这里写入clientID
+        if(data && data.data){
+            clientID=data.data;
+            showMsg('clientID:'+clientID);
+        }
+    }
+
+    function websocketClose(e) {
+        websocketConnType = false;
+        if (heartbeatTimeout) {
+            clearTimeout(heartbeatTimeout);
+        }
+        showMsg('websocket关闭了！');
+    }
+
+    function websocketHeartbeat() {
+        if (heartbeatTimeout) {
+            clearTimeout(heartbeatTimeout);
+        }
+        sendMsg('heartbeat', '');
+        heartbeatTimeout = setTimeout(() => {
+            websocketHeartbeat();
+        }, 1000 * 50);
+    }
+
+    function sendMsg(action, data) {
+        let postMsg = {};
+        postMsg.clientID = clientID;
+        postMsg.id = Date.parse(new Date())/1000;
+        let engine = document.getElementById('engine');
+        postMsg.engine=engine.options[engine.selectedIndex].value;
+        let device = document.getElementById('device');
+        postMsg.device=device.options[device.selectedIndex].value;
+        postMsg.wd=document.getElementById('wd').value;
+        postMsg.domain=document.getElementById('domain').value;
+        postMsg.page=document.getElementById('page').value;
+        showMsg('发送请求数据：'+JSON.stringify(postMsg));
+        console.log(postMsg);
+
+        $.ajax({
+        type: "get",  // 请求方式
+        url: "http://180.76.249.33:9111/api/query",  // 目标资源
+        data: postMsg, // 请求参数
+        dataType: "json",  // 服务器响应的数据类型
+        success : function (data) {  // readystate == 4 && status == 200
+             showMsg('发送请求数据：'+JSON.stringify(data));
+        }
+    });
+    }
+</script>
+</body>
+</html>
